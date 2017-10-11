@@ -1,0 +1,220 @@
+GO Functions, Structs, Interfaces and OOD
+9 Oct 2017
+
+Prozhoha Ihor
+Kolinko Ihor
+Golang Developer, SoftServe
+
+* Content
+
+* Functions
+- передача параметров по ссылке и по значению
+- именованные параметры
+- замыкания
+- функции высшего порядка
+- defer
+- системные функции
+
+* Structs
+- struct, ооп
+- методы
+- embeded объекты
+
+* Intefaces
+- пустой интерфейс
+- использование интерфейсов
+
+* Functions
+- Функция — независимая часть кода, связывающая один или несколько входных параметров с одним или несколькими выходными параметрами.
+- Функции (процедуры, подпрограммы) можно представить как черный ящик
+
+* Functions
+Для объявления функции используется следующий синтаксис:
+
+.code examplecode.go /^func имяФункции/,/^}/
+
+- Имя функции служит для ее вызова в программе и ее правило определения совпадает с правилом определения имен переменных. 
+- Список параметров необходим для передачи функции каких-либо данных при ее вызове. 
+- Тело функции — это набор операторов, которые выполняются при ее вызове.
+
+* Function example
+
+.play examplefunc.go
+
+* Function Init and Main
+
+.play init.go
+
+* Init 2 
+
+.play init2.go
+
+* Возврат нескольких значений
+.code examplecode.go /^func multireturn/,/^}/
+
+* В Go у функции могут быть именованные возвращаемые значения 
+
+// total := нулевое значение типа int64
+.code examplecode.go /^func sumNew/,/^}/
+
+* Переменное число аргументов функции
+
+.code multiargs.go
+
+* Передача по значению
+- Используется по умолчанию
+- Создается копия объекта
+- Изменения не сохраняются при выходе
+- Кроме slice и map
+
+* Передача по ссылке
+- В функцию передается указатель на значение
+- Возможны изменения в незапланированных местах
+
+* Замыкания
+.play closures.go
+
+* Системная функция — Defer
+- Defer — функция, которая будет вызвана сразу после выхода из текущей функции
+- Defer захватывает переменные объявленные до ее регистрации
+- Блоков Defer может быть более одного, порядок вызова filo (стэк) 
+
+* Defer пример
+.play defer.go
+
+* Системные функции
+- Make
+- New
+- Len/cap
+- Close
+- Append
+- Copy
+- Delete
+- Panic
+- Recover
+* Make
+func make(t Type, size ...IntegerType) Type
+
+The make built-in function allocates and initializes an object of type slice, map, or chan (only). Like new, the first argument is a type, not a value. Unlike new, make's return type is the same as the type of its argument, not a pointer to it. The specification of the result depends on the type:
+
+Slice: The size specifies the length. The capacity of the slice is equal to its length. A second integer argument may be provided to specify a different capacity; it must be no smaller than the length, so make([]int, 0, 10) allocates a slice of length 0 and capacity 10.
+Map: An empty map is allocated with enough space to hold the specified number of elements. The size may be omitted, in which case a small starting size is allocated.
+Channel: The channel's buffer is initialized with the specified buffer capacity. If zero, or the size is omitted, the channel is unbuffered.
+
+* Make
+
+.code make.go
+
+* New
+func new(Type) *Type
+
+The new built-in function allocates memory. The first argument is a type, not a value, and the value returned is a pointer to a newly allocated zero value of that type.
+
+.code new.go
+
+* Len / Cap
+
+.code lencap.go
+
+* Close
+
+For a channel c, the built-in function close(c) records that no more values will be sent on the channel. It is an error if c is a receive-only channel. Sending to or closing a closed channel causes a run-time panic. Closing the nil channel also causes a run-time panic. After calling close, and after any previously sent values have been received, receive operations will return the zero value for the channel's type without blocking. The multi-valued receive operation returns a received value along with an indication of whether the channel is closed.
+
+* Copy
+
+.code copy.go
+
+* Panic
+- Механизм panic
+- Использование recover
+.code examplecode.go /^func Sqrt/,/^}/
+
+* Маньяк 
+с топором
+
+* Goto
+
+.play goto.go
+
+* Structs
+Структуры — основной способ создания своих типов данных
+
+.code examplecode.go /^type Circle/,/^}/
+
+*в Go используется правило регистра первой буквы имени
+если название начинается заглавной буквы — это public-доступ
+если со строчной — private
+
+* Методы
+Методы в Go — это функции, определенные для конкретного типа.
+Два варианта объявления методов:
+
+.code methods.go
+
+* Пользовательские типы
+- type typeName existingType
+- Методы можно навешивать на любой тип
+.play myint.go
+
+* Пример
+.play embeded.go
+
+* Интерфейсы
+Интерфейсы определяют поведение
+.code examplecode.go /^type Speaker/,/^}/
+
+- В именовании принято постфикс -er (Sender, Reader, Closer, etc)
+- Duck typing (неявная, латентная или утиная типизация)
+- Интерфейс не может содержать данные, только методы.
+
+* Если это выглядит как утка, плавает как утка и крякает как утка, то это, вероятно, утка и есть.
+
+- В Go структура с методами будет удовлетворять интерфейсу просто самим фактом объявления метода. 
+- Структура хранит данные, но не поведение. Интерфейс хранит поведение, но не данные.
+
+* Интерфейсы
+- заверну-ка я все в interface{} — думает разработчик
+- работайте всегда с конкретными типами
+- используйте интерфейс ТОЛЬКО там где это необходимо
+- пустой интерфейс — ТОЛЬКО когда иначе никак
+- Для того, чтобы преобразовать массив в массив interface{} требуется линейное время
+
+* Type assertion
+
+.play type_assertion.go
+
+* Object Orientation Principle
+
+- Encapsulation
+- Inheritance
+- Polymorphism
+
+* Encapsulation
+
+Defined as hiding the implementation of the object, encapsulation is really the process of making an object as self sufficient as is possible.  An object contains not only code but also data.  Encapsulation, in the structured design, is the process of enclosing all of the code necessary to a particular operation into a single module and limiting the external dependencies of that module.
+
+- There are two levels of access - within the package alone, and public. 
+- tarts with a capital letter it is exported outside the package and is public. If instead it starts with a small letter, it is visible only within the package.
+- Exported/public items: MyStruct, MyMethod, MyField
+- Items with package visibility: myStruct, myMethod, myField
+- You can tie in methods/behavior to a type by defining functions associated with it. func (m my_type) my_func() int {  }
+- You cannot attach methods to a type if it is not defined in the local package.
+
+* Inheritance
+
+Just as you and I have inherited certain traits from our ancestors, so do classes in an object oriented system. There are superclasses (classes that have subclasses) and there are subclasses (classes that inherit form another class).  These terms, superclass and subclass, are relative in that a given class may be a subclass of one class and a superclass for another.
+
+_Inheritance_: the ability for one type to obtain the features of a type above it in a hierarchy. For Go, some of the salient features are:
+
+- Inheritance is obtained through anonymous fields - anonymous fields appear to attach its behavior to the composing class. 
+- Both data fields and methods are available to derived types. Outside of the package, only the types, fields, and methods named with a starting capital letter is inherited. Inside a package, everything is inherited.
+- Multiple inheritance is possible - by including an anonymous field of each of the parent types. `type Child struct { Father; Mother  }`
+
+* Polymorphism
+
+_Polymorphism_: when a type seems to exhibit different behaviors when linked to different instances, the type can be said to exhibit polymorphism. 
+
+- Interfaces in Go can be used to implement polymorphism. A variable of a type can be assigned to a variable of any interface it implements.
+
+ 
+ 
