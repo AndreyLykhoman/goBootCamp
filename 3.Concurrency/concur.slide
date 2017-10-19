@@ -1,0 +1,424 @@
+Go Concurrency
+9 Oct 2017
+
+Prozhoha Ihor
+Kolinko Ihor
+Golang Developer, SoftServe
+
+* What we will talk about
+
+- From parallel to concurrent programming
+- Go Concurrency Basic
+- Principles
+- Go Concurrency model
+
+* History
+
+.image img/langs.png
+
+* CPUs are not getting faster, but they are getting wider
+
+*Dave*Cheney*, [[http://dave.cheney.net/2015/08/08/performance-without-the-event-loop][Performance without the event loop]], 8 August 2015
+
+.image img/Ivy-Bridge_Die_Flat-HR.jpg
+Image credit: Intel
+
+* Processes (what we remember from history)
+
+- batch processing model.
+- development of multiprocessing, or time sharing, operating systems. 
+
+The operating systems maintain the illusion of concurrency by rapidly switching the attention of the CPU between active processes by recording the state of the current process, then restoring the state of another. This is called context switching.
+
+* Threads
+
+- have a share address space
+- lighter to schedule than processes -> faster to create and faster to switch between
+
+OS scheduler is universal but not optimal for each technology.
+OS can't make informed scheduling decisions, based on the Go model.
+
+* Golang Concurrency Basic
+
+* Goroutine
+
+.play code/sayhello.go
+
+* Usual programm
+.play code/single.go
+
+* Try to run it concurently
+just add some Go *go* magic
+.play code/broken.go
+
+* Goroutines basic
+
+Goroutine is a *concurrently* executing activity.
+- Cooperative multitasking
+- N x M model
+- Just *2kb* on stack overhead per a goroutine
+- Allocate memory on start
+
+use keyword *go* to run something as  goroutine
+ 
+ 	go callTheMethod(...)
+ 
+or
+ 
+ 	go func(...){ ....}(...)
+
+* Goroutine
+
+.image img/nm.png
+
+* Goroutine
+
+Cooperative multitasking switch between goroutines
+
+- Channel operation
+- Blocking syscall
+- Garbage collector
+- Function call (stack changing)
+- Net activity (netpoller)
+- runtime.goshed
+
+* Goroutine
+
+.image img/switch.png
+
+* Channels
+
+* Channels
+
+Channels are a typed conduit through which you can send and receive values with the channel operator, *<-*
+
+	ch <- v    // Send v to channel ch.
+	v := <-ch  // Receive from ch, and
+				// assign value to v.
+
+(The data flows in the direction of the arrow.)
+
+Like maps and slices, channels must be created before use:
+
+	ch := make(chan int)
+
+By default, sends and receives block until the other side is ready. This allows goroutines to synchronize without explicit locks or condition variables.
+
+* Buffered Channels
+Channels can be buffered. Provide the buffer length as the second argument to make to initialize a buffered channel:
+
+	ch := make(chan int, 100)
+Sends to a buffered channel block only when the buffer is full. Receives block when the buffer is empty.
+
+* Channels
+
+.play code/channels.go
+
+
+
+* Buffered Channels
+
+.play code/buffered-channels.go
+
+* Channels Select
+
+The `select` statement lets a goroutine wait on multiple communication operations.
+A `select` blocks until one of its cases can run, then it executes that case. It chooses one at random if multiple are ready.
+
+	for {
+		select {
+		case c <- x:
+			x, y = y, x+y
+		case <-quit:
+			fmt.Println("quit")
+			return
+		}
+	}
+
+* Channels Select Default case
+
+The `default` case in a `select` is run if no other case is ready.
+Use a `default` case to try a send or receive without blocking:
+
+	select {
+	case i := <-c:
+	    // use i
+	default:
+	    // receiving from c would block
+	}
+
+
+* Channels Select
+
+
+.play code/select.go
+
+* Range and Close
+A sender can close a channel to indicate that no more values will be sent. Receivers can test whether a channel has been closed by assigning a second parameter to the receive expression: after
+
+	v, ok := <-ch
+
+ok is false if there are no more values to receive and the channel is closed.
+
+The loop for `i := range c ` receives values from the channel repeatedly until it is closed.
+
+- Only the sender should close a channel, never the receiver. Sending on a closed channel will cause a panic.
+
+- Channels aren't like files; you don't usually need to close them. Closing is only necessary when the receiver must be told there are no more values coming, such as to terminate a range loop.
+
+* Range and Close
+
+.play code/range.go
+
+* Channels & Goroutines
+
+.play code/func1.go
+
+* Channels & Goroutines
+
+run at the same moment (DDOS, high load)
+
+	package main
+
+	func worker(start chan bool) {
+		<-start
+		// ... do something
+	}
+
+	func main() {
+		start := make(chan bool)
+
+		for i := 0; i < 100; i++ {
+			go worker(start)
+		}
+
+		close(start)
+		// ...  worker's will starts now!
+	}
+
+* Channels & Goroutines
+
+interupt gorotines at the same moment
+
+	package main
+
+	func worker(quit chan bool) {
+		for {
+			select {
+			// ... do something
+			case <-die:
+				return
+			}
+		}
+	}
+
+	func main() {
+		die := make(chan bool)
+
+		for i := 0; i < 100; i++ {
+			go worker(die)
+		}
+
+		// Stop them all
+		close(die)
+	} 
+
+* Channels & Goroutines
+
+Timeout goroutine execution
+
+	package main
+
+	import "time"
+
+	func worker() {
+		for {
+			timeout := time.After(5 * time.Second)
+
+			select {
+			// ... do something
+
+			case <-timeout:
+				// quit after timeout.
+				return
+			}
+		}
+	}
+
+	func main() {
+		go worker()
+	}
+
+* Channels & Goroutines
+Heartbeat
+
+	package main
+
+	import "time"
+
+	func worker() {
+		heartbeat := time.Tick(30 * time.Second) // heartbeat reset channel on each iteration.
+		for {
+
+			select {
+			// ... Do something
+
+			case <-heartbeat:
+				// ... timer event processing
+			}
+		}
+	}
+
+	func main() {
+		go worker()
+	}
+
+*  Channels & Goroutines
+
+Counters  generate Uniq IDs
+
+.play code/func2.go
+	
+* sync.Mutex
+
+But what if we don't need communication? What if we just want to make sure only one goroutine can access a variable at a time to avoid conflicts?
+
+This concept is called _mutual_exclusion_, and the conventional name for the data structure that provides it is _mutex_
+
+Go's standard library provides mutual exclusion with *sync.Mutex* and its two methods:
+
+  Lock
+  Unlock
+
+* sync.WaitGroup
+
+A *WaitGroup* waits for a collection of goroutines to finish. The main goroutine calls *Add* to set the number of goroutines to wait for. Then each of the goroutines runs and calls *Done* when finished. At the same time, *Wait* can be used to block until all goroutines have finished.
+
+  var wg sync.WaitGroup
+  var urls = []string{
+      "http://www.golang.org/",
+      "http://www.google.com/",
+      "http://www.somestupidname.com/",
+  }
+  for _, url := range urls {
+      wg.Add(1) // Increment the WaitGroup counter.
+      go func(url string) {// Launch a goroutine to fetch the URL.
+          defer wg.Done()// Decrement the counter when the goroutine completes.
+          http.Get(url)// Fetch the URL.
+      }(url)
+  }
+  wg.Wait()// Wait for all HTTP fetches to complete.
+
+
+* Semaphore
+
+  func execute() {
+  	s := make(chan struct{}, 3)
+  
+  	for i := 0; i < 4; i++ {
+  		go doStuff(s)
+  	}
+  }
+  
+  //....
+  func doStuff(s chan struct{}) {
+  	s <- struct{}{}
+  	defer func() { <-s }()
+  	//.. DO STUFF
+  }
+
+* Moving on
+
+  func findFirstResult(conns []Conn, query string) Result {
+    ch := make(chan Result)
+    searchReplica := func(i int) { c <- conns[i].Search(query) }
+    for i := range replicas {
+        go searchReplica(i)
+    }
+  	return <-ch
+  }
+
+* Let's write some functions
+
+  func gen(nums ...int) <-chan int {
+      out := make(chan int)
+      go func() {
+          for _, n := range nums {
+              out <- n
+          }
+          close(out)
+      }()
+      return out
+  }
+  
+* Channel from source code
+
+	type hchan struct {
+		qcount   uint           // total data in the queue
+		dataqsiz uint           // size of the circular queue
+		buf      unsafe.Pointer // points to an array of dataqsiz elements
+		elemsize uint16
+		closed   uint32
+		elemtype *_type // element type
+		sendx    uint   // send index
+		recvx    uint   // receive index
+		recvq    waitq  // list of recv waiters
+		sendq    waitq  // list of send waiters
+	  
+		// lock protects all fields in hchan, as well as several
+		// fields in sudogs blocked on this channel.
+		//
+		// Do not change another G's status while holding this lock
+		// (in particular, do not ready a G), as this can deadlock
+		// with stack shrinking.
+		lock mutex
+	  }
+
+* And one more
+
+  func sq(in <-chan int) <-chan int {
+      out := make(chan int)
+      go func() {
+          for n := range in {
+              out <- n * n
+          }
+          close(out)
+      }()
+      return out
+  }
+
+* Merge func
+
+  func merge(cs ...<-chan int) <-chan int {
+      var wg sync.WaitGroup
+      out := make(chan int)
+  
+      // Start an output goroutine for each input channel in cs.  output
+      // copies values from c to out until c is closed, then calls wg.Done.
+      output := func(c <-chan int) {
+          for n := range c {
+              out <- n
+          }
+          wg.Done()
+      }
+      wg.Add(len(cs))
+      for _, c := range cs {
+          go output(c)
+      }
+  
+      // Start a goroutine to close out once all the output goroutines are
+      // done.  This must start after the wg.Add call.
+      go func() {
+          wg.Wait()
+          close(out)
+      }()
+      return out
+  }
+
+* Code it 
+Write a clockwall, that acts as a client of several clock servers at once, reading the times from each one and displaying the results.
+
+.image  clocks.jpg
+
+“Mon Jan 2 03:04:05PM 2006 UTC-0700”
+

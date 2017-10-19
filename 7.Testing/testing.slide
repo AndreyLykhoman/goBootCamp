@@ -1,0 +1,377 @@
+Testing
+9 Oct 2017
+
+Prozhoha Ihor
+Kolinko Ihor
+Golang Developer, SoftServe
+
+
+* The basics
+
+* Testing Go code
+
+Go has a built-in testing framework.
+
+It is provided by the `testing` package and the `go` `test` command.
+
+Here is a complete test file that tests the `strings.Index` function:
+
+.code string_test.go
+
+
+* Table-driven tests
+
+Go's struct literal syntax makes it easy to write table-driven tests:
+
+.code string2_test.go /func TestIndex/,/^}/
+
+* GoTests
+
+.link https://github.com/cweill/gotests
+
+* Flags and parameters
+
+When there are multiple packages and there’s a need to run all the unit tests
+
+ go test ./...
+
+The test binaries of all packages, the one in the current directory and all subdirectories, are built and then run at the same time in parallel.
+
+The -p flag can be used to specify the number of builds and tests to run in parallel.
+
+ go test -p 1 ./...
+
+constrains the tool to build and test one package at a time.
+
+If you want to run a particular test case, you can do so by using regex
+
+ go test -run TestNameRegexp
+
+* Skipping tests
+
+Some tests may require a particular context to be executed. For example, some tests may require the presence of an external command, a specific file, or an environment variable to be set. Instead of letting those tests fail when that condition is not met, it is easy to simply skip those tests:
+
+ func TestSomeProtectedResource(t *testing.T) {
+   if os.Getenv("SOME_ACCESS_TOKEN") == "" {
+     t.Skip("skipping test; $SOME_ACCESS_TOKEN not set")
+   }
+   // ... the actual test
+ }
+
+* Skipping tests
+
+If `go test -v` is called (notice the verbose flag), the output will mention the skipped test:
+
+ === RUN TestSomeProtectedResource
+ --- SKIP: TestSomeProtectedResource (0.00 seconds)
+     example_test.go:17: skipping test; $SOME_ACCESS_TOKEN not set
+
+* Flag short
+
+When a test is known to take a while to run and you’re in a hurry, you can call go test `-short` and, provided the package developer was kind enough to implement this, long-running tests will be skipped.
+
+ func TestCountMallocs(t *testing.T) {
+   if testing.Short() {
+     t.Skip("skipping malloc count in short mode")
+   }
+   // rest of test...
+ }
+ 
+* Parallelizing tests
+
+By default, tests for a specific package are executed sequentially, but it is possible to mark some tests as safe for parallel execution using `t.Parallel()` within the test function (assuming the argument is named t, as is the convention). Only those tests marked as parallel will be executed in parallel, so having just one is kind of useless.
+
+ func TestParallel(t *testing.T) {
+   t.Parallel()
+   // actual test...
+ }
+
+The number of tests run simultaneously in parallel is the current value of *GOMAXPROCS* by default. It can be set to a specific value via the `-parallel n` flag (`go test -parallel 4`).
+
+* Test with timeout
+
+There’s also the `-timeout` flag that can be used to force a test to panic if it doesn’t finish within this duration. For example, running `go test -timeout 1s` with this test:
+
+ func TestWillTimeout(t *testing.T) {
+   time.Sleep(2 * time.Second)
+   // pass if timeout > 2s
+ }
+
+produces this output (truncated):
+
+ === RUN TestWillTimeout
+ panic: test timed out after 1s
+
+* Test coverage
+
+The `go` tool can report test coverage statistics.
+
+	$ go test -cover
+	PASS
+	coverage: 96.4% of statements
+	ok  	strings	0.692s
+
+The `go` tool can generate coverage profiles that may be intepreted by the `cover` tool.
+
+	$ go test -coverprofile=cover.out
+	$ go tool cover -func=cover.out
+	strings/reader.go:    Len             66.7%
+	strings/strings.go:   TrimSuffix     100.0%
+	... many lines omitted ...
+	strings/strings.go:   Replace        100.0%
+	strings/strings.go:   EqualFold      100.0%
+	total:                (statements)    96.4%
+
+* Coverage visualization
+
+	$ go tool cover -html=cover.out
+
+.image cover.png
+
+
+* Testing HTTP clients and servers
+
+The `net/http/httptest` package provides helpers for testing code that makes or serves HTTP requests.
+
+
+* httptest.Server
+
+An `httptest.Server` listens on a system-chosen port on the local loopback interface, for use in end-to-end HTTP tests.
+
+	type Server struct {
+		URL      string // base URL of form http://ipaddr:port with no trailing slash
+		Listener net.Listener
+
+		// TLS is the optional TLS configuration, populated with a new config
+		// after TLS is started. If set on an unstarted server before StartTLS
+		// is called, existing fields are copied into the new config.
+		TLS *tls.Config
+
+		// Config may be changed after calling NewUnstartedServer and
+		// before Start or StartTLS.
+		Config *http.Server
+	}
+
+	func NewServer(handler http.Handler) *Server
+
+	func (*Server) Close() error
+
+* httptest.Server in action
+
+This code sets up a temporary HTTP server that serves a simple "Hello" response.
+
+.play http_server.go /START/,/STOP/
+
+
+* httptest.ResponseRecorder
+
+`httptest.ResponseRecorder` is an implementation of `http.ResponseWriter` that records its mutations for later inspection in tests.
+
+	type ResponseRecorder struct {
+		Code      int           // the HTTP response code from WriteHeader
+		HeaderMap http.Header   // the HTTP response headers
+		Body      *bytes.Buffer // if non-nil, the bytes.Buffer to append written data to
+		Flushed   bool
+	}
+
+* httptest.ResponseRecorder in action
+
+By passing a `ResponseRecorder` into an HTTP handler we can inspect the generated response.
+
+.play httprecorder.go /START/,/STOP/
+
+
+* Race Detection
+
+A data race occurs when two goroutines access the same variable concurrently and at least one of the accesses is a write.
+
+To help diagnose such bugs, Go includes a built-in data race detector.
+
+Pass the `-race` flag to the go tool to enable the race detector:
+
+	$ go test -race mypkg    // to test the package
+	$ go run -race mysrc.go  // to run the source file
+	$ go build -race mycmd   // to build the command
+	$ go install -race mypkg // to install the package
+
+* Finding errors with static analysis: vet
+
+The `vet` tool checks code for common programmer mistakes:
+
+- bad printf formats,
+- bad build tags,
+- bad range loop variable use in closures,
+- useless assignments,
+- unreachable code,
+- bad use of mutexes,
+- and more.
+
+Usage:
+
+	go vet [package]
+
+* GoMetaLinter
+
+.link https://github.com/alecthomas/gometalinter
+
+* Mocks and fakes
+
+Go eschews mocks and fakes in favor of writing code that takes broad interfaces.
+
+For example, if you're writing a file format parser, don't write a function like this:
+
+	func Parse(f *os.File) error
+
+instead, write functions that take the interface you need:
+
+	func Parse(r io.Reader) error
+
+(An `*os.File` implements `io.Reader`, as does `bytes.Buffer` or `strings.Reader`.)
+
+* Mocking in Golang
+
+ package reader
+ 
+ import "fmt"
+ 
+ type InputServicer interface {
+ 	Data(url string) ([]byte, error)
+ }
+ 
+ type Reader struct {
+ 	Servicer InputServicer
+ }
+ 
+ func (r Reader) Fetch(url string) ([]byte, error) {
+ 	data, err := r.Servicer.Data(url)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("Unable to fetch the data from url : %v", err)
+ 	}
+ 	return data, nil
+ }
+
+* Mocking in Golang
+
+ package reader
+ 
+ import (
+ 	"fmt"
+ 	"github.com/stretchr/testify/require"
+ 	"reflect"
+ 	"testing"
+ )
+ 
+ type StubInputServicer struct {}
+ 
+ func (s StubInputServicer) Data(url string) ([]byte, error) {
+ 	if url != "" {
+ 		return []byte(url), nil
+ 	}
+ 	return nil, fmt.Errorf("Error")
+ }
+ // .... ->
+
+* Mocking in Golang
+
+ // -> ...
+ func TestFetchToGetByteArray(t *testing.T) {
+ 	reader := Reader{
+ 		Servicer: StubInputServicer{},
+ 	}
+ 	actualResult, err := reader.Fetch("getInput")
+ 	require.NoError(t, err, "Expected no error")
+ 	expectedResult := []byte("getInput")
+ 	if !reflect.DeepEqual(expectedResult, actualResult) {
+ 		t.Fatalf("Expected %v but got %v", expectedResult, actualResult)
+ 	}
+ }
+ 
+ func TestFetchToReturnError(t *testing.T) {
+ 	reader := Reader{
+ 		Servicer: StubInputServicer{},
+ 	}
+ 	actualResult, err := reader.Fetch("")
+ 	expectedResult := "Unable to fetch the data from url : Error"
+ 	require.Equal(t, err.Error(), expectedResult)
+ 	require.Nil(t, actualResult)
+ }
+
+* Redefine functions
+- Go supports first class functions
+- Tests have access to package local functions
+- We can swap out the implementation of a function for testing
+
+* Redefine function 
+
+	var ErrUnknownLocation = errors.New("unknown location")
+
+	func GetWeather(location string) (*Weather, error) {
+	  code, err := findStationCode(location)
+	  if err != nil {
+		return nil, err
+	  }
+	  return queryStation(code)
+	}
+
+	var findStationCode = func(location string) (code int, err error) {
+	  res, err := http.Get(fmt.Sprintf("https://weather.com/?loc=%s", location))
+	  ...
+	}
+
+* Redefine function on tests
+
+	func TestUnknownLocation(t *testing.T) {
+	  findStationCode = func(location string) (code int, err error) {
+		if location == "New York, NY" {
+		  return 10011, nil
+		}
+		return 0, ErrUnknownLocation
+	  }
+
+	  _, err := GetWeather("Batman, Turkey")
+	  if err != ErrUnknownLocation {
+		t.Error("we should not have found Batman")
+		t.Error(err)
+	  }
+
+	  _, err = GetWeather("New York, NY")
+	  if err != nil {
+		t.Error("we should have found New York, c'mon!")
+		t.Error(err)
+	  }
+	}
+
+* Using net/http/httptest
+
+	import (
+	  "fmt"
+	  "log"
+	  "net/http"
+	  "net/http/httptest"
+	)
+
+	func TestRecorder(t *testing.T) {
+	  handler := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "something failed", http.StatusInternalServerError)
+	  }
+
+	  req, err := http.NewRequest("GET", "http://example.com/foo", nil)
+	  if err != nil {
+		log.Fatal(err)
+	  }
+
+	  w := httptest.NewRecorder()
+	  handler(w, req)
+
+	  fmt.Printf("%d - %s", w.Code, w.Body.String())
+	}
+
+
+* More information
+
+.link http://golang.org/pkg/testing/
+
+.link http://golang.org/cmd/go/
+
+.link http://golang.org
+

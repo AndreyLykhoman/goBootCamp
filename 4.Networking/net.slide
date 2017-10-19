@@ -1,0 +1,287 @@
+Go Networking
+9 Oct 2017
+
+Prozhoha Ihor
+Kolinko Ihor
+Golang Developer, SoftServe
+
+* Thanks for your help
+
+Ivan Kutuzov
+Dmytro Lahoza
+
+* Networking
+
+* Concepts in web principles
+
+- Request: request data from users, including POST, GET, Cookie and URL.+
+- Response: response data from server to clients.
+- Conn: connections between clients and servers.
+- Handler: Request handling logic and response generation.
+
+* Standard http workflow
+
+.image img/how-web-works.png _ 800
+
+* Go and standard HTTP library
+
+*Go* has great standard HTTP server supplied with `net/http` library.
+
+`http.Server` implements a simple but powerful interface with full support of HTTP/1.0, 1.1 and even 2.0 protocols.
+
+Full featured *TLS/SSL* also included.
+
+It extendable and most of the frameworks work on top of the idea of `net/http`
+
+* RLY?
+
+But standard HTTP servers is *crap*!
+
+* What inside
+
+- Multithreaded system with routine-by-request approach, which can be replaced to workers pool 
+- Router with request multiplexer and parameters parser
+- Everything you need out from the box
+
+* HTTP server
+
+How to start:
+
+    package main
+    
+    import (
+        "fmt"
+        "net/http"
+    )
+    
+    func handler(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
+    }
+    
+    func main() {
+        http.HandleFunc("/", handler)
+        http.ListenAndServe(":8080", nil)
+    }
+    
+* HTTP server
+
+How to create middleware
+
+    func log(h http.HandlerFunc) http.HandlerFunc {
+      return func(w http.ResponseWriter, r *http.Request) {
+        log.Println("Before")
+        h(w, r)
+        log.Println("After")
+      }
+    }
+    
+    func main() {
+            http.HandleFunc("/", log(handler))
+            http.ListenAndServe(":8080", nil)
+    }
+    
+    * Net package
+
+Package net provides a portable interface for network I/O, including TCP/IP, UDP, domain name resolution, and Unix domain sockets.
+
+Let's go deeply.
+
+* Net general
+
+Although the package provides access to low-level networking primitives, most clients will need only the basic interface provided by the Dial, Listen, and Accept functions and the associated Conn and Listener interfaces. The crypto/tls package uses the same interfaces and similar Dial and Listen functions.
+
+* Net Dial
+
+The Dial function connects to a server:
+
+ conn, err := net.Dial("tcp", "golang.org:80")
+ if err != nil {
+ 	// handle error
+ }
+ fmt.Fprintf(conn, "GET / HTTP/1.0\r\n\r\n")
+ status, err := bufio.NewReader(conn).ReadString('\n')
+ // ...
+
+* Net Listen
+
+The Listen function creates servers:
+
+ ln, err := net.Listen("tcp", ":8080")
+ if err != nil {
+ 	// handle error
+ }
+ for {
+ 	conn, err := ln.Accept()
+ 	if err != nil {
+ 		// handle error
+ 	}
+ 	go handleConnection(conn)
+ }
+
+* net/url
+
+Package url parses URLs and implements query escaping. [[https://golang.org/pkg/net/url/][link]]
+
+ u, err := url.Parse("http://bing.com/search?q=dotnet")
+ if err != nil {
+ 	log.Fatal(err)
+ }
+ u.Scheme = "https"
+ u.Host = "google.com"
+ q := u.Query()
+ q.Set("q", "golang")
+ u.RawQuery = q.Encode()
+ fmt.Println(u)
+
+* net/http
+
+Package http provides HTTP client and server implementations. [[https://golang.org/pkg/net/http/][link]]
+
+Get, Head, Post, and PostForm make HTTP (or HTTPS) requests:
+
+ resp, err := http.Get("http://example.com/")
+ ...
+ resp, err := http.Post("http://example.com/upload", "image/jpeg", &buf)
+ ...
+ resp, err := http.PostForm("http://example.com/form",
+ 	url.Values{"key": {"Value"}, "id": {"123"}})
+
+The client must close the response body when finished with it:
+
+ resp, err := http.Get("http://example.com/")
+ if err != nil {
+ 	// handle error
+ }
+ defer resp.Body.Close()
+ body, err := ioutil.ReadAll(resp.Body)
+ // ...
+
+* net/http (continue)
+
+For control over HTTP client headers, redirect policy, and other settings, create a Client:
+
+ client := &http.Client{
+ 	CheckRedirect: redirectPolicyFunc,
+ }
+ 
+ resp, err := client.Get("http://example.com")
+ // ...
+ 
+ req, err := http.NewRequest("GET", "http://example.com", nil)
+ // ...
+ req.Header.Add("If-None-Match", `W/"wyzzy"`)
+ resp, err := client.Do(req)
+ // ...
+
+* net/http (continue 2)
+
+For control over proxies, TLS configuration, keep-alives, compression, and other settings, create a Transport:
+
+ tr := &http.Transport{
+ 	TLSClientConfig:    &tls.Config{RootCAs: pool},
+ 	DisableCompression: true,
+ }
+ client := &http.Client{Transport: tr}
+ resp, err := client.Get("https://example.com")
+ // ...
+
+*Important* Clients and Transports are safe for concurrent use by multiple goroutines and for efficiency should only be created once and re-used.
+
+* net/http (continue 3)
+
+ListenAndServe starts an HTTP server with a given address and handler. The handler is usually nil, which means to use DefaultServeMux. Handle and HandleFunc add handlers to DefaultServeMux:
+
+ http.Handle("/foo", fooHandler)
+ 
+ http.HandleFunc("/bar", func(w http.ResponseWriter, r *http.Request) {
+ 	fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
+ })
+ 
+ log.Fatal(http.ListenAndServe(":8080", nil))
+
+More control over the server's behavior is available by creating a custom Server:
+
+ s := &http.Server{
+ 	Addr:           ":8080",
+ 	Handler:        myHandler,
+ 	ReadTimeout:    10 * time.Second,
+ 	WriteTimeout:   10 * time.Second,
+ 	MaxHeaderBytes: 1 << 20,
+ }
+ log.Fatal(s.ListenAndServe())
+
+* net/http type ServeMux
+
+ServeMux is an HTTP request multiplexer. It matches the URL of each incoming request against a list of registered patterns and calls the handler for the pattern that most closely matches the URL.
+
+Patterns name fixed, rooted paths, like "/favicon.ico", or rooted subtrees, like "/images/" (note the trailing slash). Longer patterns take precedence over shorter ones, so that if there are handlers registered for both "/images/" and "/images/thumbnails/", the latter handler will be called for paths beginning "/images/thumbnails/" and the former will receive requests for any other paths in the "/images/" subtree.
+
+Note that since a pattern ending in a slash names a rooted subtree, the pattern "/" matches all paths not matched by other registered patterns, not just the URL with Path == "/".
+
+Third party packages
+- [[http://github.com/gorilla/mux][gorilla mux]]
+- [[https://github.com/julienschmidt/httprouter][HttpRouter]]
+
+* A web server
+
+[[https://golang.org/doc/effective_go.html#web_server][Effective Go]]
+
+ var addr = flag.String("addr", ":1718", "http service address") // Q=17, R=18
+ 
+ var templ = template.Must(template.New("qr").Parse(templateStr))
+ 
+ func main() {
+     flag.Parse()
+     http.Handle("/", http.HandlerFunc(QR))
+     err := http.ListenAndServe(*addr, nil)
+     if err != nil {
+         log.Fatal("ListenAndServe:", err)
+     }
+ }
+ 
+ func QR(w http.ResponseWriter, req *http.Request) {
+     templ.Execute(w, req.FormValue("s"))
+ }
+ 
+ const templateStr = `...
+
+* Variety of techniques
+
+- TCP / UDP
+- HTTP / HTTP/2
+- Socket
+- RPC
+- REST
+
+* WebSockets
+
+- Only one TCP connection for a single web client.
+- WebSocket servers can push data to web clients.
+- Lightweight header to reduce data transmission overhead.
+
+.link https://astaxie.gitbooks.io/build-web-application-with-golang/en/08.2.html Build web application with Golang
+
+* REST
+
+REpresentational State Transfer
+
+- Every URI represents a resource.
+- There is a representation layer for transferring resources between clients and servers.
+- Clients use four HTTP methods to implement "Presentation Layer State Transfer", allowing them to operate on remote resources.
+
+* RPC
+
+RPC is based around the idea of defining a service, specifying the methods that can be called remotely with their parameters and return types. On the server side, the server implements this interface and runs a RPC server to handle client calls. On the client side, the client has a stub (referred to as just a client in some languages) that provides the same methods as the server.
+
+- Functions are exported (capitalized).
+- Functions must have two arguments with exported types.
+- The first argument is for receiving from the client, and the second one has to be a pointer and is for replying to the client.
+- Functions must have a return value of error type.
+
+  func (t *T) MethodName(argType T1, replyType *T2) error
+
+* Not only existing protocol
+
+We are able to create a new ones.
+
+- [[https://github.com/lonli078/chat][Simple Chat]]
